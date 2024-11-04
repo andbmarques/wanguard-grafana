@@ -22,11 +22,12 @@ const conn = mysql.createConnection({
 
 //DEFINE A FUNÇÃO QUE IRÁ FAZER A REQUISIÇÃO DAS ANOMALIAS
 async function getAnomalies() {
+  let anomalies;
   //EXECUTA UM TRY/CATCH A FIM DE CAPTURAR UM ERRO CASO OCORRA
   try {
     //FAZ A REQUISIÇÃO HTTP GET
     const response = await fetch(
-      `${wanguard_api_url}/wanguard-api/v1/anomalies?status=Active&fields=anomaly_id%2Cprefix%2Cdecoder%2Cduration%2Cbits%2Fs%2Cbits`,
+      `${wanguard_api_url}/wanguard-api/v1/anomalies?status=Active&fields=anomaly_id%2Cprefix%2Cdecoder%2Cduration%2Cbits%2Fs%2Cbits%2Cip_group`,
       {
         headers: {
           Accept: "application/json",
@@ -42,10 +43,12 @@ async function getAnomalies() {
     //TRANSFORMA OS DADOS DA RESPONSE EM JSON
     const data = await response.json();
     //RETORNA OS DADOS
-    return data;
+    anomalies = data;
   } catch (error) {
     //SE CAPTURAR UM ERRO, EXIBE NO LOG
     console.log(error.message);
+  } finally {
+    saveOnDB(anomalies);
   }
 }
 
@@ -54,7 +57,9 @@ function saveOnDB(data) {
   //CONECTA O MYSQL
   conn.connect((err) => {
     //RETORNA ERRO SE A CONEXÃO NÃO FOR REALIZADA
-    if (err) throw err;
+    if (err) console.log(err.message);
+    //RETORNA NO LOG SE A CONEXÃO FOI BEM SUCEDIDA.
+    console.log("Mysql Conectado.");
     //REALIZA UM LOOP PARA CADA ANOMALIA
     for (let i = 0; i < data.length; i++) {
       //PEGA A ANOMALIA ATUAL NO LOOP
@@ -62,21 +67,23 @@ function saveOnDB(data) {
       //DEFINE A DATA
       const timestamp = new Date();
       //STRING DA QUERY SQL
-      let sql = `INSERT INTO ddos_metrics (timestamp, attack_type, attack_target, attack_size, attack_duration) VALUES ("${timestamp
+      let sql = `INSERT INTO ddos_metrics (timestamp, attack_type, attack_target, attack_size, attack_duration, ip_group) VALUES ("${timestamp
         .toISOString()
         .slice(0, 19)
         .replace("T", " ")}", "${attack.decoder.decoder_name}", "${
         attack.prefix
-      }", ${attack.bits}, "${attack.duration}")`;
+      }", ${attack.bits}, "${attack.duration}", "${attack.ip_group}")`;
       //REALIZA A QUERY COM O INSERT DA ANOMALIA
       conn.query(sql, (err, result) => {
-        if (err) throw err;
+        
       });
     }
+    console.log("Anomalias salvas no DB")
   });
+  conn.destroy()
 }
 
 //DEFINE A VARIÁVEL QUE IRÁ RECEBER AS ANOMALIAS E CHAMA A FUNÇÃO
-const anomalies = getAnomalies();
+getAnomalies();
 //SALVA AS ANOMALIAS NO BANCO DE DADOS
-saveOnDB(anomalies);
+//if (anomalies) saveOnDB(anomalies);
